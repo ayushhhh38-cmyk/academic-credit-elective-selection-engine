@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academic Credit & Elective Selection Engine</title>
+<style>
+:root{--navy:#152b4a;--blue:#2864dc;--bg:#f4f7fb;--card:#fff;--text:#172033;--muted:#667085;--green:#16834a;--red:#c0392b;--border:#e2e8f0}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+header{background:var(--navy);color:#fff;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}header p{margin:5px 0 0;color:#d5dfed;font-size:13px}
+main{max-width:1100px;margin:24px auto;padding:0 16px}.panel,.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 3px 12px #10243b08}
+.login{max-width:420px;margin:60px auto}.login h2{margin-top:0}label{display:block;font-size:13px;font-weight:bold;margin:12px 0 6px}
+input,select{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
+button{border:0;border-radius:8px;padding:10px 14px;background:var(--blue);color:#fff;font-weight:bold;cursor:pointer;margin:4px 3px 4px 0}
+button.secondary{background:#e8eef8;color:var(--navy)}button.danger{background:var(--red)}button:disabled{opacity:.5;cursor:not-allowed}
+.hidden{display:none!important}.notice{padding:11px 13px;border-radius:8px;margin:10px 0;background:#eaf2ff;color:#1e4e9b}.error{background:#fff0ef;color:#9b2c21}.success{background:#e9f8ef;color:#126b3a}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.course h3{margin:0 0 8px;font-size:17px}.course p{margin:6px 0;color:var(--muted);font-size:14px}.tag{display:inline-block;padding:4px 8px;border-radius:99px;background:#edf2ff;color:#234c9c;font-size:12px;margin:3px 0}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.stats{display:flex;gap:12px;flex-wrap:wrap}.stat{flex:1;min-width:140px;background:#f7f9fc;border-radius:10px;padding:14px}.stat strong{font-size:24px;display:block;margin-top:5px}
+nav{display:flex;gap:8px;flex-wrap:wrap}nav button{background:#fff;color:var(--navy);border:1px solid #cbd5e1}nav button.active{background:#dce8ff;border-color:#8aafff}
+.small{font-size:12px;color:var(--muted)}.footer{font-size:12px;color:var(--muted);text-align:center;margin:22px 0}
+</style>
+</head>
+<body>
+<header>
+ <div><h1>Academic Credit & Elective Selection Engine</h1><p>Browse electives • Check eligibility • Register • Track credits</p></div>
+ <div id="headerUser" class="hidden"></div>
+</header>
+<main>
+<section id="loginView" class="panel login">
+ <h2>Student Login</h2>
+ <p class="small">Demo login. Authentication is simulated for this prototype.</p>
+ <label>Username</label><input id="username" value="ayush.more" autocomplete="username">
+ <label>Password</label><input id="password" type="password" value="demo123" autocomplete="current-password">
+ <button onclick="login()">Login</button>
+ <div id="loginMessage"></div>
+ <p class="small">Demo: ayush.more / demo123</p>
+</section>
+
+<section id="appView" class="hidden">
+ <div class="row panel">
+  <div><h2 id="welcome" style="margin:0">Dashboard</h2><p class="small">Backend connected at <code>http://localhost:3000</code></p></div>
+  <nav><button class="active" data-view="dashboard" onclick="showView('dashboard',this)">Dashboard</button><button data-view="catalogue" onclick="showView('catalogue',this)">Elective Catalogue</button><button data-view="registered" onclick="showView('registered',this)">My Electives</button><button data-view="admin" onclick="showView('admin',this)">Admin</button><button class="secondary" onclick="logout()">Logout</button></nav>
+ </div>
+ <div id="message"></div>
+ <section id="dashboardView" class="view">
+  <div class="panel"><h2>Dashboard</h2><div class="stats"><div class="stat">Registered Electives<strong id="registeredCount">0</strong></div><div class="stat">Registered Credits<strong id="creditCount">0</strong></div><div class="stat">Maximum Electives<strong>2</strong></div></div></div>
+  <div class="panel"><h3>Completed Subjects</h3><div id="completedSubjects"></div></div>
+ </section>
+ <section id="catalogueView" class="view hidden"><div class="panel"><h2>Elective Catalogue</h2><div id="catalogue" class="grid"></div></div></section>
+ <section id="registeredView" class="view hidden"><div class="panel"><h2>My Registered Electives</h2><div id="registeredCourses" class="grid"></div></div></section>
+ <section id="adminView" class="view hidden"><div class="panel"><h2>Admin: Add Elective</h2><p class="small">Demo admin controls; no authentication is implemented.</p>
+  <label>Elective title</label><input id="newTitle" placeholder="e.g. Full Stack Development">
+  <label>Department</label><input id="newDepartment" placeholder="e.g. CSE">
+  <label>Credits</label><input id="newCredits" type="number" min="1" value="3">
+  <label>Prerequisite (optional)</label><input id="newPrerequisite" placeholder="e.g. Python Programming">
+  <label>Capacity</label><input id="newCapacity" type="number" min="1" value="30">
+  <button onclick="addElective()">Add Elective</button></div></section>
+</section>
+<div class="footer">Prototype for academic elective selection • Sample data • Backend uses in-memory storage</div>
+</main>
+<script>
+const API_BASE="http://localhost:3000/api";
+let currentStudent=null, electives=[], registeredIds=[];
+async function api(path,options={}){
+ const res=await fetch(API_BASE+path,{...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});
+ let data={};try{data=await res.json()}catch{}
+ if(!res.ok)throw new Error(data.message||`Request failed (${res.status})`);
+ return data;
+}
+function message(text,type="notice",target="message"){const el=document.getElementById(target);el.innerHTML=`<div class="notice ${type==="error"?"error":type==="success"?"success":""}">${escapeHtml(text)}</div>`;}
+function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+async function login(){
+ const u=document.getElementById("username").value.trim(),p=document.getElementById("password").value;
+ if(u!=="ayush.more"||p!=="demo123"){message("Invalid demo credentials. Use ayush.more / demo123.","error","loginMessage");return;}
+ try{await sync();currentStudent=await api("/students/1");document.getElementById("loginView").classList.add("hidden");document.getElementById("appView").classList.remove("hidden");document.getElementById("headerUser").classList.remove("hidden");document.getElementById("headerUser").textContent=currentStudent.name;document.getElementById("welcome").textContent="Welcome, "+currentStudent.name;showView("dashboard");renderAll();}
+ catch(e){message("Could not connect to backend: "+e.message,"error","loginMessage");}
+}
+async function sync(){electives=await api("/electives");currentStudent=await api("/students/1");registeredIds=currentStudent.registeredCourseIds||[];}
+function showView(name,btn){document.querySelectorAll(".view").forEach(v=>v.classList.add("hidden"));document.getElementById(name+"View").classList.remove("hidden");document.querySelectorAll("nav button[data-view]").forEach(b=>b.classList.remove("active"));if(btn)btn.classList.add("active");renderAll();}
+async function renderAll(){if(!currentStudent)return;try{await sync();renderDashboard();renderCatalogue();renderRegistered();}catch(e){message(e.message,"error");}}
+function renderDashboard(){document.getElementById("registeredCount").textContent=registeredIds.length;const credits=registeredIds.reduce((sum,id)=>sum+(electives.find(c=>c.id===id)?.credits||0),0);document.getElementById("creditCount").textContent=credits;document.getElementById("completedSubjects").innerHTML=(currentStudent.completedSubjects||[]).map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join(" ")||"None";}
+function courseCard(c,registered=false){const prereq=c.prerequisite||"None";return `<div class="card course"><h3>${escapeHtml(c.title)}</h3><p><b>Department:</b> ${escapeHtml(c.department)}</p><p><b>Credits:</b> ${c.credits}</p><p><b>Prerequisite:</b> ${escapeHtml(prereq)}</p><p><b>Seats:</b> ${c.availableSeats}/${c.capacity}</p>${registered?`<button class="danger" onclick="removeCourse(${c.id})">Remove Registration</button>`:`<button onclick="registerCourse(${c.id})" ${c.availableSeats<=0?"disabled":""}>Register</button>`}</div>`;}
+function renderCatalogue(){document.getElementById("catalogue").innerHTML=electives.map(c=>courseCard(c,false)).join("")||"No electives found.";}
+function renderRegistered(){const list=electives.filter(c=>registeredIds.includes(c.id));document.getElementById("registeredCourses").innerHTML=list.map(c=>courseCard(c,true)).join("")||"<p>You have not registered for any electives yet.</p>";}
+async function registerCourse(id){try{const result=await api("/students/1/register",{method:"POST",body:JSON.stringify({courseId:id})});message(result.message,"success");await renderAll();}catch(e){message(e.message,"error");}}
+async function removeCourse(id){try{const result=await api(`/students/1/register/${id}`,{method:"DELETE"});message(result.message,"success");await renderAll();}catch(e){message(e.message,"error");}}
+async function addElective(){const payload={title:document.getElementById("newTitle").value.trim(),department:document.getElementById("newDepartment").value.trim(),credits:Number(document.getElementById("newCredits").value),prerequisite:document.getElementById("newPrerequisite").value.trim()||null,capacity:Number(document.getElementById("newCapacity").value)};try{const r=await api("/electives",{method:"POST",body:JSON.stringify(payload)});message(r.message,"success");document.getElementById("newTitle").value="";await renderAll();}catch(e){message(e.message,"error");}}
+function logout(){currentStudent=null;electives=[];registeredIds=[];document.getElementById("appView").classList.add("hidden");document.getElementById("loginView").classList.remove("hidden");document.getElementById("headerUser").classList.add("hidden");}
+</script>
+</body>
+</html>
